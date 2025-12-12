@@ -53,6 +53,7 @@ const CustomAvatar = forwardRef(({
 
   // persistent 모드: 프로필 이미지 URL 처리
   useEffect(() => {
+
     if (!persistent) return;
 
     const imageUrl = getImageUrl(user?.profileImage);
@@ -104,13 +105,25 @@ const CustomAvatar = forwardRef(({
 
   // 최종 이미지 URL 결정
   const finalImageUrl = (() => {
-    if (!showImage) return undefined;
-    
-    if (persistent) {
-      return currentImage && !imageError ? currentImage : undefined;
+
+    try {
+      const imageId = JSON.parse(JSON.parse(localStorage.getItem('user')).profileImage).imageId;
+      console.log('테스틔: ', imageId);
+      return `https://dypusta48vkr4.cloudfront.net/profile/${imageId}`;
     }
+    catch(error) {
+      const imageId = undefined;
+      return undefined;
+    }
+
+    // if (!showImage) return undefined;
     
-    return getImageUrl(user?.profileImage);
+    // if (persistent) {
+    //   return currentImage && !imageError ? currentImage : undefined;
+    // }
+    
+    // return getImageUrl(user?.profileImage);
+
   })();
 
   // 사용자 이름 첫 글자
