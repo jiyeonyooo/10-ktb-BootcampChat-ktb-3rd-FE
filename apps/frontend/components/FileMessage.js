@@ -136,7 +136,7 @@ const FileMessage = ({
     console.log('다운로드', previewUrl);
 
     //const filename = msg.file?.filename;
-    if(!msg.fileId) {
+    if(!filename) {
       throw new Error('파일 정보가 없습니다.');
     }
 
@@ -260,7 +260,8 @@ const FileMessage = ({
 
   const renderImagePreview = (originalname) => {
     try {
-      if (!msg?.fileId) {
+        console.log(msg);
+      if (!msg?.metadata.filename) {
         return (
           <div className="flex items-center justify-center h-full bg-gray-100">
             <Image className="w-8 h-8 text-gray-400" />
@@ -273,7 +274,7 @@ const FileMessage = ({
       }
 
       //const previewUrl = fileService.getPreviewUrl(msg.file, user?.token, user?.sessionId, true);
-      const previewUrl = `https://dypusta48vkr4.cloudfront.net/chat/${msg.fileId}`;
+      const previewUrl = `https://dypusta48vkr4.cloudfront.net/chat/${msg.metadata.filename}`;
 
       return (
         <div className="bg-transparent-pattern">

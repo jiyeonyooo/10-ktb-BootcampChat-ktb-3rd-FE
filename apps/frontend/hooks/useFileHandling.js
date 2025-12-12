@@ -45,7 +45,7 @@ export const useFileHandling = (socketRef, currentUser, router, handleSessionErr
         fileData: {
           _id: uploadResponse.data.file._id,
           filename: uploadResponse.data.file.filename,
-          originalname: uploadResponse.data.file.originalname,
+          originalname: uploadResponse.data.file.originalName,
           mimetype: uploadResponse.data.file.mimetype,
           size: uploadResponse.data.file.size
         }

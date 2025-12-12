@@ -39,16 +39,18 @@ const CustomAvatar = forwardRef(({
   // 프로필 이미지 URL 생성 (memoized)
   const getImageUrl = useCallback((imagePath) => {
     // src prop이 직접 제공된 경우
-    if (src) return src;
+    // if (src) return src;
     
-    if (!imagePath) return null;
+    // if (!imagePath) return null;
     
     // 이미 전체 URL인 경우
-    if (imagePath.startsWith('http')) {
-      return imagePath;
-    }
+    // if (imagePath.startsWith('http')) {
+    //   return imagePath;
+    // }
     // API URL과 결합 필요한 경우
-    return `${process.env.NEXT_PUBLIC_API_URL}${imagePath}`;
+      console.log(imagePath);
+      return `https://dypusta48vkr4.cloudfront.net/profile/${imagePath}`;
+    // return `${process.env.NEXT_PUBLIC_API_URL}${imagePath}`;
   }, [src]);
 
   // persistent 모드: 프로필 이미지 URL 처리
