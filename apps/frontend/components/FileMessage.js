@@ -28,21 +28,47 @@ const FileMessage = ({
   const [error, setError] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const messageDomRef = useRef(null);
-  useEffect(() => {
-    if (msg?.file) {
-      const url = fileService.getPreviewUrl(msg.file, user?.token, user?.sessionId, true);
-      setPreviewUrl(url);
-      console.debug('Preview URL generated:', {
-        filename: msg.file.filename,
-        url
-      });
-    }
-  }, [msg?.file, user?.token, user?.sessionId]);
 
-  if (!msg?.file) {
-    console.error('File data is missing:', msg);
-    return null;
-  }
+  //그린: 이미지 다운로드 throttling 적용을 위한 useRef 사용
+  const downloadGuardRef = useRef({
+    inFlight: new Set(),      // filename
+    lastStartedAt: new Map(), // filename -> timestamp
+  });
+  const DOWNLOAD_COOLDOWN_MS = 2000; //같은 filname에 대해서는 2초동안 무시
+
+  // useEffect(() => {
+  //   console.log('useEffect');
+  //   if (msg?.file) {
+  //     console.log('메세지가 파일임을 확인');
+  //     const url = fileService.getPreviewUrl(msg.file, user?.token, user?.sessionId, true);
+  //     setPreviewUrl(url);
+  //     console.debug('Preview URL generated:', {
+  //       filename: msg.file.filename,
+  //       url
+  //     });
+  //   }
+  // }, [msg?.file, user?.token, user?.sessionId]);
+
+  //그린: 수정 버전
+  useEffect(() => {
+  
+    if (!msg?.fileId) return;
+       
+    console.log('메세지가 파일임을 확인', msg);
+    const url = `https://dypusta48vkr4.cloudfront.net/chat/${msg.fileId}`;
+    console.log('S3 이미지 경로: ', url);
+    setPreviewUrl(url);
+    console.debug('Preview URL generated:', {
+      filename: msg.fileId,
+      url
+    });
+    
+  }, [msg?.fileId, user?.token, user?.sessionId]);
+
+  // if (!msg?.fileId) {
+  //   console.error('FileId is missing in message:', msg);
+  //   return null;
+  // }
 
   const formattedTime = new Date(msg.timestamp).toLocaleString('ko-KR', {
     year: 'numeric',
@@ -55,7 +81,9 @@ const FileMessage = ({
   }).replace(/\./g, '년').replace(/\s/g, ' ').replace('일 ', '일 ');
 
   const getFileIcon = () => {
-    const mimetype = msg.file?.mimetype || '';
+    //const mimetype = msg.file?.mimetype || '';
+    //그린 수정
+    const mimetype = (msg.metadata?.fileType) || '';
     const iconProps = { className: "w-5 h-5 flex-shrink-0" };
 
     if (mimetype.startsWith('image/')) return <Image {...iconProps} color="#00C853" />;
@@ -96,31 +124,52 @@ const FileMessage = ({
     />
   );
 
+
+
   const handleFileDownload = async (e) => {
     e.preventDefault();
     e.stopPropagation();
     setError(null);
 
-    try {
-      if (!msg.file?.filename) {
-        throw new Error('파일 정보가 없습니다.');
-      }
+    const filename = msg.file?.filename;
 
+    console.log('다운로드', previewUrl);
+
+    //const filename = msg.file?.filename;
+    if(!filename) {
+      throw new Error('파일 정보가 없습니다.');
+    }
+
+    try {
       if (!user?.token || !user?.sessionId) {
         throw new Error('인증 정보가 없습니다.');
       }
 
-      const baseUrl = fileService.getFileUrl(msg.file.filename, false);
-      const authenticatedUrl = `${baseUrl}?token=${encodeURIComponent(user?.token)}&sessionId=${encodeURIComponent(user?.sessionId)}&download=true`;
-      
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = authenticatedUrl;
-      document.body.appendChild(iframe);
+      const res = await fetch(previewUrl, {
+      method: 'GET',
+      credentials: 'omit',
+    });
 
-      setTimeout(() => {
-        document.body.removeChild(iframe);
-      }, 5000);
+    if (!res.ok) {
+      throw new Error(`파일 다운로드 실패 (status: ${res.status})`);
+    }
+
+    const blob = await res.blob();
+
+    const blobUrl = window.URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename || 'download';
+    link.style.display = 'none';
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setTimeout(() => {
+      window.URL.revokeObjectURL(blobUrl);
+    }, 1000);
 
     } catch (error) {
       console.error('File download error:', error);
@@ -128,13 +177,16 @@ const FileMessage = ({
     }
   };
 
+
   const handleViewInNewTab = (e) => {
     e.preventDefault();
     e.stopPropagation();
     setError(null);
 
+    console.log("msg: ", msg);
+
     try {
-      if (!msg.file?.filename) {
+      if (!msg.metadata.filename) {
         throw new Error('파일 정보가 없습니다.');
       }
 
@@ -142,10 +194,10 @@ const FileMessage = ({
         throw new Error('인증 정보가 없습니다.');
       }
 
-      const baseUrl = fileService.getFileUrl(msg.file.filename, true);
-      const authenticatedUrl = `${baseUrl}?token=${encodeURIComponent(user?.token)}&sessionId=${encodeURIComponent(user?.sessionId)}`;
+      const baseUrl = `https://dypusta48vkr4.cloudfront.net/chat/${msg.metadata.filename}`;
+    
 
-      const newWindow = window.open(authenticatedUrl, '_blank');
+      const newWindow = window.open(baseUrl, '_blank');
       if (!newWindow) {
         throw new Error('팝업이 차단되었습니다. 팝업 차단을 해제해주세요.');
       }
@@ -156,9 +208,60 @@ const FileMessage = ({
     }
   };
 
+  // const renderImagePreview = (originalname) => {
+  //   try {
+  //     if (!msg?.file?.filename) {
+  //       return (
+  //         <div className="flex items-center justify-center h-full bg-gray-100">
+  //           <Image className="w-8 h-8 text-gray-400" />
+  //         </div>
+  //       );
+  //     }
+
+  //     if (!user?.token || !user?.sessionId) {
+  //       throw new Error('인증 정보가 없습니다.');
+  //     }
+
+  //     const previewUrl = fileService.getPreviewUrl(msg.file, user?.token, user?.sessionId, true);
+
+  //     return (
+  //       <div className="bg-transparent-pattern">
+  //         <img
+  //           src={previewUrl}
+  //           alt={originalname}
+  //           className="max-w-[400px] max-h-[400px] object-cover object-center rounded-md"
+  //           onLoad={() => {
+  //             console.debug('Image loaded successfully:', originalname);
+  //           }}
+  //           onError={(e) => {
+  //             console.error('Image load error:', {
+  //               error: e.error,
+  //               originalname
+  //             });
+  //             e.target.onerror = null;
+  //             e.target.src = '/images/placeholder-image.png';
+  //             setError('이미지를 불러올 수 없습니다.');
+  //           }}
+  //           loading="lazy"
+  //           data-testid="file-image-preview"
+  //         />
+  //       </div>
+  //     );
+  //   } catch (error) {
+  //     console.error('Image preview error:', error);
+  //     setError(error.message || '이미지 미리보기를 불러올 수 없습니다.');
+  //     return (
+  //       <div className="flex items-center justify-center h-full bg-gray-100">
+  //         <Image className="w-8 h-8 text-gray-400" />
+  //       </div>
+  //     );
+  //   }
+  // };
+
   const renderImagePreview = (originalname) => {
     try {
-      if (!msg?.file?.filename) {
+        console.log(msg);
+      if (!msg?.metadata.filename) {
         return (
           <div className="flex items-center justify-center h-full bg-gray-100">
             <Image className="w-8 h-8 text-gray-400" />
@@ -170,7 +273,8 @@ const FileMessage = ({
         throw new Error('인증 정보가 없습니다.');
       }
 
-      const previewUrl = fileService.getPreviewUrl(msg.file, user?.token, user?.sessionId, true);
+      //const previewUrl = fileService.getPreviewUrl(msg.file, user?.token, user?.sessionId, true);
+      const previewUrl = `https://dypusta48vkr4.cloudfront.net/chat/${msg.metadata.filename}`;
 
       return (
         <div className="bg-transparent-pattern">
@@ -207,13 +311,18 @@ const FileMessage = ({
   };
 
   const renderFilePreview = () => {
+    console.log('채팅 렌더링: ', msg);
     const mimetype = msg.file?.mimetype || '';
-    const originalname = getDecodedFilename(msg.file?.originalname || 'Unknown File');
-    const size = fileService.formatFileSize(msg.file?.size || 0);
+    // const originalname = getDecodedFilename(msg.file?.originalname || 'Unknown File');
+    const originalname = msg.metadata.originalName || 'Unknown File';
+    const size = fileService.formatFileSize(msg.metadata.fileSize || 0);
+
 
     const previewWrapperClass = "overflow-hidden";
 
-    if (mimetype.startsWith('image/')) {
+    // if (mimetype.startsWith('image/')) {
+    if (msg.metadata.fileType.startsWith('image/')) {
+      console.log('이미지 확인');
       return (
         <div className={previewWrapperClass}>
           {renderImagePreview(originalname)}

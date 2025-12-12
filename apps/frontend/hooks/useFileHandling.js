@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Toast } from '../components/Toast';
 import fileService from '../services/fileService';
+import { FileAddIcon } from '@vapor-ui/icons';
 
 export const useFileHandling = (socketRef, currentUser, router, handleSessionError) => {
   const [filePreview, setFilePreview] = useState(null);
@@ -38,18 +39,30 @@ export const useFileHandling = (socketRef, currentUser, router, handleSessionErr
         throw new Error(uploadResponse.message || '파일 업로드에 실패했습니다.');
       }
 
+      const fileData = {
+        _id: uploadResponse.data.file._id,
+        filename: uploadResponse.data.file.filename,
+        originalname: uploadResponse.data.file.originalname,
+        mimetype: uploadResponse.data.file.mimetype,
+        size: uploadResponse.data.file.size
+      }
+
       await socketRef.current.emit('chatMessage', {
         room: roomId,
         type: 'file',
         content: content,
-        fileData: {
-          _id: uploadResponse.data.file._id,
-          filename: uploadResponse.data.file.filename,
-          originalname: uploadResponse.data.file.originalname,
-          mimetype: uploadResponse.data.file.mimetype,
-          size: uploadResponse.data.file.size
-        }
+        fileData: fileData,
       });
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/files/upload`, {
+        method: 'POST',
+        headers: {
+         'Content-Type': 'application/json', 
+        },
+        body: JSON.stringify(fileData),
+      });
+
+      console.log('추가 API 요청: ', response);
 
       setFilePreview(null);
       setUploading(false);
